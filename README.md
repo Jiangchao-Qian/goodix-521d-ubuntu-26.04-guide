@@ -112,7 +112,7 @@ sudo apt-mark hold libfprint-2-2 fprintd libpam-fprintd
 sudo systemctl restart fprintd
 fprintd-enroll                 # right index (5-6 presses)
 fprintd-enroll -f left-index-finger
-fprintd-list charles-tsien     # confirm both stored
+fprintd-list Your_User_Name     # confirm both stored
 ```
 
 PAM (keep a `sudo -i` shell open in another terminal as a safety net first!):
