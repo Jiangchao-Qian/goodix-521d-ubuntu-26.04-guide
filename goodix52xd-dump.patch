@@ -1,0 +1,92 @@
+diff --git a/libfprint/drivers/goodixtls/goodix52xd.c b/libfprint/drivers/goodixtls/goodix52xd.c
+index 0ed60c0..1597e9f 100644
+--- a/libfprint/drivers/goodixtls/goodix52xd.c
++++ b/libfprint/drivers/goodixtls/goodix52xd.c
+@@ -42,6 +42,36 @@
+ 
+ #include <math.h>
+ 
++/* ===== TEMPORARY DEBUG: dump frames + assembled images to /tmp/goodix-dump.
++ * Remove this block once the verify-no-match bug is diagnosed. ===== */
++#include <errno.h>
++static guint dbg_capture_id = 0;
++
++static void dbg_dump_pgm(guint cap_id, const char *tag, int idx,
++                         const guint8 *data, int w, int h)
++{
++    char path[256];
++    FILE *f;
++
++    g_mkdir_with_parents("/tmp/goodix-dump", 0755);
++    if (idx >= 0)
++        snprintf(path, sizeof(path), "/tmp/goodix-dump/cap%03u-%s%02d.pgm",
++                 cap_id, tag, idx);
++    else
++        snprintf(path, sizeof(path), "/tmp/goodix-dump/cap%03u-%s.pgm",
++                 cap_id, tag);
++    f = fopen(path, "wb");
++    if (!f) {
++        fp_warn("dbg dump: cannot open %s: %s", path, g_strerror(errno));
++        return;
++    }
++    fprintf(f, "P5\n%d %d\n255\n", w, h);
++    fwrite(data, 1, (size_t) w * h, f);
++    fclose(f);
++    fp_dbg("dbg dump: wrote %s (%dx%d)", path, w, h);
++}
++/* ===== END TEMPORARY DEBUG ===== */
++
+ #define GOODIX52XD_WIDTH 64
+ #define GOODIX52XD_HEIGHT 80
+ #define GOODIX52XD_SCAN_WIDTH 64
+@@ -484,6 +514,7 @@ static gboolean postprocess_frame(Goodix52xdPix frame[GOODIX52XD_FRAME_SIZE],
+ typedef struct _frame_processing_info {
+     FpiDeviceGoodixTls52XD* dev;
+     GSList** frames;
++    guint cap_id; /* TEMPORARY DEBUG */
+ 
+ } frame_processing_info;
+ 
+@@ -494,6 +525,10 @@ static void process_frame(Goodix52xdPix* raw_frame, frame_processing_info* info)
+     //postprocess_frame(raw_frame, info->dev->empty_img);
+     squash_frame_linear(raw_frame, frame->data);
+ 
++    /* TEMPORARY DEBUG: dump each squashed frame exactly as the assembler sees it */
++    dbg_dump_pgm(info->cap_id, "frame", g_slist_length(*(info->frames)),
++                 frame->data, GOODIX52XD_WIDTH, GOODIX52XD_HEIGHT);
++
+     *(info->frames) = g_slist_append(*(info->frames), frame);
+ }
+ 
+@@ -529,13 +564,30 @@ static void scan_on_read_img(FpDevice* dev, guint8* data, guint16 len,
+         assembly_ctx.get_pixel = get_pix;
+ 
+         GSList* frames = NULL;
+-        frame_processing_info pinfo = {.dev = self, .frames = &frames};
++        guint cap_id = dbg_capture_id++; /* TEMPORARY DEBUG */
++        frame_processing_info pinfo = {.dev = self, .frames = &frames,
++                                       .cap_id = cap_id};
+ 
+         g_slist_foreach(raw_frames, (GFunc) process_frame, &pinfo);
+         frames = g_slist_reverse(frames);
+ 
+         fpi_do_movement_estimation(&assembly_ctx, frames);
++        /* TEMPORARY DEBUG: log the deltas the assembler is about to use */
++        for (GSList *l = frames; l; l = l->next) {
++            struct fpi_frame *fr = l->data;
++            fp_dbg("dbg dump: cap%03u frame delta_x=%d delta_y=%d",
++                   cap_id, fr->delta_x, fr->delta_y);
++        }
+         FpImage* img = fpi_assemble_frames(&assembly_ctx, frames);
++        /* TEMPORARY DEBUG: dump the final image handed to NBIS */
++        if (img) {
++            fp_dbg("dbg dump: cap%03u assembled image %dx%d", cap_id,
++                   img->width, img->height);
++            dbg_dump_pgm(cap_id, "assembled", -1, img->data,
++                         img->width, img->height);
++        } else {
++            fp_warn("dbg dump: cap%03u assembly returned NULL", cap_id);
++        }
+ 
+         g_slist_free_full(frames, g_free);
+         g_slist_free_full(self->frames, g_free);
