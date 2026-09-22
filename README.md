@@ -195,8 +195,7 @@ The fprintd debug log showed genuine matcher scores — `score 19/24`, `score 30
 
 - `README.md` — this progress log
 - `goodix52xd-dump.patch` — temporary instrumentation used to diagnose the bug (dumps frames + deltas; not for production use)
-- `goodix52xd-fix.patch` — the actual fix: press-sensor frame averaging replacing swipe assembly (includes a temporary final-image dump block, removed after verification)
-- `sim/` — early static simulation of the frame assembly (superseded by real hardware dumps)
+- `goodix52xd-fix.patch` — the actual fix: press-sensor frame averaging replacing swipe assembly
 
 ---
 
